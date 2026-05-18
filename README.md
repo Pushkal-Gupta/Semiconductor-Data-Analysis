@@ -93,9 +93,11 @@ _Numbers below come from running notebook 03 with `RANDOM_STATE=42`. See `report
 
 | Model | PR-AUC | ROC-AUC | F1 @0.5 | F1 (tuned) | Recall (tuned) |
 | --- | --- | --- | --- | --- | --- |
-| Logistic regression (baseline) | _see notebook_ | _see notebook_ | _see notebook_ | _see notebook_ | _see notebook_ |
-| Histogram gradient boosting | _see notebook_ | _see notebook_ | _see notebook_ | _see notebook_ | _see notebook_ |
-| Small MLP | _see notebook_ | _see notebook_ | _see notebook_ | _see notebook_ | _see notebook_ |
+| Logistic regression (baseline) | 0.125 | 0.635 | 0.127 | 0.172 | 0.667 |
+| Histogram gradient boosting | **0.182** | **0.711** | 0.000 | **0.220** | 0.619 |
+| Small MLP | 0.184 | 0.638 | 0.216 | 0.178 | 0.667 |
+
+The HGB row's F1 at the default 0.5 threshold is zero because, with `class_weight="balanced"`, the calibrated probabilities for fails never quite cross 0.5 — the model is well-calibrated to the true 6.6% base rate. That's exactly why we threshold-tune. After tuning, HGB has the strongest F1 of the three.
 
 The threshold-tuning rule: among thresholds with recall ≥ 0.60, pick the one with the highest precision. This encodes the asymmetric cost of missing a defective wafer in a fab — better to flag a few extras for inspection than to ship a bad one.
 
@@ -110,6 +112,8 @@ Held-out test set, 9 classes, heavily imbalanced toward 'none'. Macro-F1 is the 
 ## Notes on choices
 
 - **HistGradientBoostingClassifier instead of XGBoost.** I started with XGBoost but the local environment had a libomp/architecture conflict. Scikit-learn's HGB is a histogram-based gradient booster with similar characteristics and one fewer external dependency. If you want to swap in XGBoost yourself, uncomment it in `requirements.txt`; the notebook only needs a `predict_proba`-capable classifier.
+- **PyTorch instead of Keras for the CNN.** Tried Keras first; the local TensorFlow install was unhappy and PyTorch was already on the machine, so I pivoted. PyTorch is also a lighter dependency for a model this size.
+- **sklearn's `MLPClassifier` for the SECOM MLP.** With ~1,200 training rows there's no win from a custom training loop. Sklearn handles class balance through SMOTE upstream, early stopping is built in, and the result is honest.
 - **No KNN imputation.** Tempting on high-dim sensor data but slow at this row count and not obviously better than median imputation here.
 - **No data augmentation for the WM-811K CNN.** Wafer maps carry meaningful orientation (notches, flat edges) so the usual rotation/flip augmentation is unsafe without domain-aware modification. Left as future work.
 - **Threshold tuning for SECOM, not for WM-811K.** SECOM is a binary, asymmetric-cost problem where the threshold is a real operational lever. WM-811K is multiclass and the operating choice is more nuanced; argmax is fine for a baseline.

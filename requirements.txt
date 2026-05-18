@@ -1,15 +1,16 @@
-numpy==1.26.4
-pandas==2.2.2
-scikit-learn==1.5.1
-matplotlib==3.9.2
-seaborn==0.13.2
-imbalanced-learn==0.12.3
-shap==0.46.0
-tensorflow==2.16.2
-# xgboost is optional — the notebooks use scikit-learn's HistGradientBoostingClassifier
-# (histogram-based GBM, similar characteristics, no libomp dependency). Uncomment if you
-# want to swap in xgboost yourself.
-# xgboost==2.1.1
-jupyter==1.1.1
-joblib==1.4.2
-tqdm==4.66.5
+numpy>=1.26
+pandas>=2.0
+scikit-learn>=1.5
+matplotlib>=3.8
+seaborn>=0.13
+imbalanced-learn>=0.12,<0.14
+shap>=0.46,<0.55
+torch>=2.0,<3.0
+pillow>=10.0
+joblib>=1.3
+tqdm>=4.66
+jupyter>=1.0
+
+# Optional — uncomment if you want gradient boosting via XGBoost rather than
+# scikit-learn's HistGradientBoostingClassifier (the notebooks use HGB by default).
+# xgboost>=2.0,<3.0
