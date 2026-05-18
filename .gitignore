@@ -1,0 +1,25 @@
+# Data — raw is large and downloaded separately, processed is regenerated
+data/raw/wm811k/*.pkl
+data/processed/*.npz
+data/processed/*.pkl
+
+# Trained models
+models/*.h5
+models/*.keras
+models/*.joblib
+models/*.pkl
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Notebooks
+.ipynb_checkpoints/
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/
