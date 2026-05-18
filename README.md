@@ -97,17 +97,33 @@ _Numbers below come from running notebook 03 with `RANDOM_STATE=42`. See `report
 | Histogram gradient boosting | **0.182** | **0.711** | 0.000 | **0.220** | 0.619 |
 | Small MLP | 0.184 | 0.638 | 0.216 | 0.178 | 0.667 |
 
+![PR and ROC curves](reports/figures/secom_compare_curves.png)
+
 The HGB row's F1 at the default 0.5 threshold is zero because, with `class_weight="balanced"`, the calibrated probabilities for fails never quite cross 0.5 — the model is well-calibrated to the true 6.6% base rate. That's exactly why we threshold-tune. After tuning, HGB has the strongest F1 of the three.
 
 The threshold-tuning rule: among thresholds with recall ≥ 0.60, pick the one with the highest precision. This encodes the asymmetric cost of missing a defective wafer in a fab — better to flag a few extras for inspection than to ship a bad one.
+
+#### What drives the predictions?
+
+SHAP summary on the gradient-boosting model. Features are anonymized as `sensor_N`, so I can't name physical processes — but the shape of the importance distribution itself is informative: a handful of sensors carry most of the signal, with a long flat tail. That pattern matches what process engineers report about yield drivers in real fabs.
+
+![SHAP summary](reports/figures/secom_shap_summary.png)
 
 ### WM-811K — defect-pattern classification
 
 Held-out test set, 9 classes, heavily imbalanced toward 'none'. Macro-F1 is the headline metric.
 
-| Model | macro-F1 (test) |
-| --- | --- |
-| Small CNN (3 conv blocks, GAP + dense head) | _see notebook_ |
+Sample wafer maps by class — pass dies in grey, fails in red:
+
+![WM-811K samples by class](reports/figures/wm811k_samples.png)
+
+| Model | macro-F1 (test) | accuracy | notes |
+| --- | --- | --- | --- |
+| Small CNN (3 conv blocks, GAP + dense head) | **0.733** | 0.923 | per-class F1 ranges from 0.49 (Loc) to 0.97 (Edge-Ring) |
+
+Per-class breakdown — the spatially distinctive patterns (Edge-Ring, Random, Donut, Near-full, 'none') all score F1 ≥ 0.67. The hard classes are 'Loc' and 'Scratch', which overlap visually at 64×64.
+
+![Confusion matrix](reports/figures/wm811k_eval_cm.png)
 
 ## Notes on choices
 

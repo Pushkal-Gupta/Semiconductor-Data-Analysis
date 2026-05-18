@@ -1,4 +1,6 @@
-# Data — raw is large and downloaded separately, processed is regenerated
+# Data — raw is downloaded separately (see data/raw/*/README.md), processed is regenerated
+data/raw/secom/secom.data
+data/raw/secom/secom_labels.data
 data/raw/wm811k/*.pkl
 data/processed/*.npz
 data/processed/*.pkl
