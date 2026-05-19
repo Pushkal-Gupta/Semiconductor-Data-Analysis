@@ -206,4 +206,3 @@ For both:
 
 - The SECOM dataset was donated to the UCI ML Repository by McCann and Johnston in 2008.
 - WM-811K is from Wu, Jang, and Chen's *IEEE Transactions on Semiconductor Manufacturing* paper, hosted on Kaggle by user `qingyi`.
-- The framing of this project as a "yield prediction / defect analysis pipeline" rather than a generic ML demo — and a lot of the structural guidance (use PR-AUC not accuracy, try SMOTE/ADASYN, use SHAP, structure the project in two phases) — came from going back and forth with ChatGPT while planning the repo. I built it; the structuring was a collaboration.
