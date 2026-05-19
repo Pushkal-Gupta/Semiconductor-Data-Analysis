@@ -1,17 +1,38 @@
 # Semiconductor Yield Prediction & Defect Analysis
 
-Two end-to-end machine-learning projects on real semiconductor-manufacturing data. The framing is deliberate — these aren't "fit a model to a dataset" notebooks; each one walks through what a process- or yield-engineering team would actually want to know about the data and the resulting model.
+I built this as a portfolio project to push myself on data-wrangling-heavy industrial data and to actually *use* a bunch of techniques I'd previously only read about — SHAP, SMOTE, threshold tuning, CNNs on real images instead of MNIST, that sort of thing.
+
+I picked semiconductor manufacturing because the data is famously messy and the questions tied to it are intuitive even if you don't work in a fab:
+
+1. **Which wafers will fail final test?** — caught early, the wafer never moves to the next expensive process step.
+2. **What *kind* of defect is happening, and where on the wafer?** — pattern recognition tells the process engineer which physical step went wrong.
+
+Two datasets, one for each question:
 
 | | Project | Dataset | Problem | Approach |
 | - | --- | --- | --- | --- |
-| 1 | Yield prediction from process sensors | UCI [SECOM](https://archive.ics.uci.edu/dataset/179/secom) | Predict pass/fail of finished wafers from 590 in-line sensor signals | Heavy preprocessing → logistic regression / gradient boosting / MLP comparison → threshold tuning + SHAP |
+| 1 | Yield prediction from process sensors | UCI [SECOM](https://archive.ics.uci.edu/dataset/179/secom) | Predict pass/fail of finished wafers from 590 in-line sensor signals | Heavy preprocessing → LogReg / gradient boosting / MLP comparison → threshold tuning + SHAP |
 | 2 | Wafer-map defect classification | Kaggle [WM-811K](https://www.kaggle.com/datasets/qingyi/wm811k-wafer-map) | Classify wafer-map defect *patterns* (8 patterns + 'none') | Small convolutional network with class-weighted loss |
+
+---
+
+## The most interesting thing I learned
+
+> I went into the CNN notebook expecting it to be the *hard* part. Classifying images of defects sounded intimidating compared to a tabular pass/fail problem. It turned out to be the opposite.
+>
+> The defect patterns are visually *so* distinct — Edge-Ring is literally a red ring, Donut is a red donut, Near-full is nearly all red — that even a tiny CNN at 64×64 resolution scores F1 = 0.97 on Edge-Ring and >0.84 on the obviously-shaped classes. The classes that *did* stump my model (Loc at F1 = 0.49, Scratch at 0.58) are the same ones a human looking at the wafer maps would also struggle with. They're small, less-distinctive failure clusters that look like they could go either way.
+>
+> The "AI works well on the same things humans work well on" pattern was much more visible here than I expected.
+
+The opposite was true on the SECOM tabular side — that's where the *preprocessing* did most of the work, not the modeling. Going from 590 raw sensor features to 271 cleaned ones is the step that moved logistic regression from "barely above random" to "usable as a baseline."
+
+---
 
 ## Repo layout
 
 ```
 .
-├── README.md                       # you are here
+├── README.md
 ├── requirements.txt
 ├── data/
 │   ├── raw/                        # downloaded; not committed
@@ -23,15 +44,19 @@ Two end-to-end machine-learning projects on real semiconductor-manufacturing dat
 │   ├── 04_wm811k_eda.ipynb         # wafer-map distribution and samples
 │   └── 05_wm811k_cnn.ipynb         # CNN defect classifier
 ├── src/                            # reusable helpers used by the notebooks
-│   ├── data_io.py
-│   ├── preprocessing.py
-│   ├── modeling.py
-│   └── plots.py
+│   ├── data_io.py                  # dataset loaders
+│   ├── preprocessing.py            # drop_high_missing / drop_constant / drop_correlated
+│   ├── modeling.py                 # evaluate(), tune_threshold()
+│   └── plots.py                    # shared plot helpers
 ├── reports/                        # CSV result tables + exported figures
 └── models/                         # trained artifacts; gitignored
 ```
 
-## Setup
+I kept the `src/` helpers small on purpose — heavy/reusable logic lives there so the notebooks stay focused on the *story*, but I didn't want a fake framework around a portfolio repo.
+
+---
+
+## How to set this up
 
 ```bash
 python3 -m venv .venv
@@ -39,11 +64,11 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-The notebooks expect their working directory to be `notebooks/`. JupyterLab/VS Code do this automatically; if you're running with `jupyter nbconvert --execute`, run it from inside `notebooks/`.
+Notebooks expect to be run with their own directory as the working directory. JupyterLab / VS Code do this automatically; with `jupyter nbconvert --execute` run it from inside `notebooks/`.
 
-## Getting the data
+### Getting the data
 
-**SECOM** (small, public, no auth):
+**SECOM** is small (5 MB) and public:
 
 ```bash
 mkdir -p data/raw/secom
@@ -53,9 +78,7 @@ curl -L -o data/raw/secom/secom_labels.data \
   https://archive.ics.uci.edu/ml/machine-learning-databases/secom/secom_labels.data
 ```
 
-**WM-811K** (~150 MB compressed, ~2 GB unpacked):
-
-The easiest way is via the `kagglehub` package, which downloads public Kaggle datasets anonymously:
+**WM-811K** is bigger (~150 MB compressed, ~2 GB unpacked) and lives on Kaggle. The easiest way is via `kagglehub`, which downloads public Kaggle datasets anonymously — you don't need an API key:
 
 ```bash
 pip install kagglehub
@@ -64,15 +87,11 @@ python -c "import kagglehub, shutil, os; \
   shutil.copy(os.path.join(p, 'LSWMD.pkl'), 'data/raw/wm811k/LSWMD.pkl')"
 ```
 
-Or, if you have a Kaggle CLI configured:
+(That was a nice find — I'd assumed I'd need to set up Kaggle credentials and it turned out I didn't.)
 
-```bash
-kaggle datasets download -d qingyi/wm811k-wafer-map -p data/raw/wm811k/ --unzip
-```
+### Running the notebooks
 
-## Running
-
-Notebooks are intended to run in order. Phase 1 (SECOM) is self-contained — notebook 02 reads `data/raw/secom/`, writes to `data/processed/`, and notebook 03 reads from there. Phase 2 (WM-811K) is independent of phase 1.
+They're meant to run in order. Phase 1 (SECOM) is self-contained: notebook 02 writes its cleaned arrays to `data/processed/` and notebook 03 picks them up from there. Phase 2 (WM-811K) is independent of phase 1.
 
 ```bash
 cd notebooks/
@@ -83,15 +102,19 @@ jupyter nbconvert --to notebook --execute 04_wm811k_eda.ipynb --inplace
 jupyter nbconvert --to notebook --execute 05_wm811k_cnn.ipynb --inplace
 ```
 
+The WM-811K CNN takes the longest — about 10 minutes on Apple Silicon MPS at the settings I'm using.
+
+---
+
 ## Results
 
-### SECOM — pass/fail classification
+### SECOM — predicting pass/fail
 
-Held-out test set (314 wafers, 6.6% positive). PR-AUC is the primary metric — accuracy is misleading at this imbalance, and ROC-AUC understates how hard the rare-positive problem actually is. Random-baseline PR-AUC is ≈ 0.066.
+Held-out test set: 314 wafers, 6.6% positive. PR-AUC is my primary metric here. Random-baseline PR-AUC is ≈ 0.066 (just the positive class fraction).
 
-_Numbers below come from running notebook 03 with `RANDOM_STATE=42`. See `reports/secom_results.csv` for the raw table._
+I deliberately *didn't* use accuracy — a model that always predicts "pass" scores 93.4% accuracy and is worthless. The whole SECOM notebook is structured around making sure the imbalance is properly respected end-to-end.
 
-| Model | PR-AUC | ROC-AUC | F1 @0.5 | F1 (tuned) | Recall (tuned) |
+| Model | PR-AUC | ROC-AUC | F1 @ 0.5 | F1 (tuned) | Recall (tuned) |
 | --- | --- | --- | --- | --- | --- |
 | Logistic regression (baseline) | 0.125 | 0.635 | 0.127 | 0.172 | 0.667 |
 | Histogram gradient boosting | **0.182** | **0.711** | 0.000 | **0.220** | 0.619 |
@@ -99,43 +122,88 @@ _Numbers below come from running notebook 03 with `RANDOM_STATE=42`. See `report
 
 ![PR and ROC curves](reports/figures/secom_compare_curves.png)
 
-The HGB row's F1 at the default 0.5 threshold is zero because, with `class_weight="balanced"`, the calibrated probabilities for fails never quite cross 0.5 — the model is well-calibrated to the true 6.6% base rate. That's exactly why we threshold-tune. After tuning, HGB has the strongest F1 of the three.
+A couple of things I want to call out:
 
-The threshold-tuning rule: among thresholds with recall ≥ 0.60, pick the one with the highest precision. This encodes the asymmetric cost of missing a defective wafer in a fab — better to flag a few extras for inspection than to ship a bad one.
+- The HGB row's F1 at the default 0.5 threshold is **zero**, which looked alarming at first. After staring at it I think it's actually a good sign: with `class_weight='balanced'`, the model is well-calibrated to the true 6.6% base rate, so its predicted probabilities for fails sit below 0.5. That's exactly the situation where threshold tuning matters — and after tuning, HGB has the strongest F1 of the three.
+- The MLP being almost tied with HGB on PR-AUC was a small surprise. Everything I'd read said gradient boosting wins comfortably on small tabular data. The gap is within run-to-run noise here. SMOTE plus the MLP's regularization seems to be enough to close it — but on the *tuned* F1 (the metric I'd actually care about operationally), HGB is still clearly the best.
+
+**The threshold-tuning rule:** among thresholds with recall ≥ 0.60, pick the one with the highest precision. This is encoding the asymmetric cost — in a fab, *missing* a bad wafer (which then consumes more expensive process steps) costs more than a false alarm (which just sends a good wafer to second-line inspection). I learned to do this properly from the imbalanced-learn docs and Aurélien Géron's chapter on classification.
 
 #### What drives the predictions?
 
-SHAP summary on the gradient-boosting model. Features are anonymized as `sensor_N`, so I can't name physical processes — but the shape of the importance distribution itself is informative: a handful of sensors carry most of the signal, with a long flat tail. That pattern matches what process engineers report about yield drivers in real fabs.
+SHAP summary on the gradient-boosting model:
 
 ![SHAP summary](reports/figures/secom_shap_summary.png)
 
+The features are anonymized as `sensor_N`, so I can't map them back to real physical processes. But the *shape* of the importance distribution is interesting on its own: a handful of sensors (sensor_33, 103, 205, 59, 31…) carry most of the signal, with a long flat tail. The bar at the bottom — "Sum of 252 other features" — shows that 252 of my 271 cleaned features barely contribute anything.
+
+If I worked at the fab and could map those sensor IDs to physical process steps, that would be a real piece of feedback for the process engineering team. Right now it's the analytical equivalent: "Whatever sensor 33 is measuring, that's where to look."
+
 ### WM-811K — defect-pattern classification
 
-Held-out test set, 9 classes, heavily imbalanced toward 'none'. Macro-F1 is the headline metric.
+Held-out test set: 25,943 wafer maps, 9 classes, heavily skewed toward 'none'. Macro-F1 weights every class equally, which is the right metric to keep me honest given the imbalance.
 
-Sample wafer maps by class — pass dies in grey, fails in red:
+Some sample wafer maps so the problem makes sense — pass dies in grey, fails in red:
 
 ![WM-811K samples by class](reports/figures/wm811k_samples.png)
 
-| Model | macro-F1 (test) | accuracy | notes |
+| Model | Macro-F1 (test) | Accuracy | Notes |
 | --- | --- | --- | --- |
-| Small CNN (3 conv blocks, GAP + dense head) | **0.733** | 0.923 | per-class F1 ranges from 0.49 (Loc) to 0.97 (Edge-Ring) |
+| Small CNN (3 conv blocks, GAP head) | **0.733** | 0.923 | Per-class F1 ranges from 0.49 (Loc) to 0.97 (Edge-Ring) |
 
-Per-class breakdown — the spatially distinctive patterns (Edge-Ring, Random, Donut, Near-full, 'none') all score F1 ≥ 0.67. The hard classes are 'Loc' and 'Scratch', which overlap visually at 64×64.
+Per-class breakdown:
+
+| Class | F1 | Reading |
+| --- | --- | --- |
+| Edge-Ring | 0.97 | Distinctive ring → easy for the CNN |
+| 'none' | 0.96 | The dominant class; clean signal |
+| Near-full | 0.84 | Most pixels red, very distinctive |
+| Random | 0.76 | "Everywhere" pattern; the CNN learns it |
+| Center | 0.67 | Confused occasionally with Loc / 'none' |
+| Edge-Loc | 0.67 | Edge proximity helps but it's not as clean as Edge-Ring |
+| Donut | 0.67 | Real signal, hurt by tiny class size (83 test examples) |
+| Scratch | 0.58 | Linear vs cluster ambiguity at 64×64 |
+| Loc | 0.49 | Small clusters look like everything else |
 
 ![Confusion matrix](reports/figures/wm811k_eval_cm.png)
 
-## Notes on choices
+The confusion matrix lines up exactly with what I described above: rows where the model is confident (Edge-Ring, 'none', Near-full, Donut, Random) are deep blue along the diagonal. Loc and Scratch are the smudged rows.
 
-- **HistGradientBoostingClassifier instead of XGBoost.** I started with XGBoost but the local environment had a libomp/architecture conflict. Scikit-learn's HGB is a histogram-based gradient booster with similar characteristics and one fewer external dependency. If you want to swap in XGBoost yourself, uncomment it in `requirements.txt`; the notebook only needs a `predict_proba`-capable classifier.
-- **PyTorch instead of Keras for the CNN.** Tried Keras first; the local TensorFlow install was unhappy and PyTorch was already on the machine, so I pivoted. PyTorch is also a lighter dependency for a model this size.
-- **sklearn's `MLPClassifier` for the SECOM MLP.** With ~1,200 training rows there's no win from a custom training loop. Sklearn handles class balance through SMOTE upstream, early stopping is built in, and the result is honest.
-- **No KNN imputation.** Tempting on high-dim sensor data but slow at this row count and not obviously better than median imputation here.
-- **No data augmentation for the WM-811K CNN.** Wafer maps carry meaningful orientation (notches, flat edges) so the usual rotation/flip augmentation is unsafe without domain-aware modification. Left as future work.
-- **Threshold tuning for SECOM, not for WM-811K.** SECOM is a binary, asymmetric-cost problem where the threshold is a real operational lever. WM-811K is multiclass and the operating choice is more nuanced; argmax is fine for a baseline.
+I'm pretty happy with this for a CNN this small. I trained it for 12 epochs in about 10 minutes on Apple Silicon — no tuning, no augmentation. With more compute and a few obvious improvements, this is clearly pushable higher (see "what I'd try next").
+
+---
+
+## Choices that didn't go to plan (being honest about it)
+
+A few things I want to flag rather than hide:
+
+- **I started with XGBoost.** It didn't load on my Mac because of a libomp / Apple-Silicon mismatch (the wheel was looking for `libomp.dylib` in the homebrew prefix that exists on Apple Silicon, but my Homebrew is in the Intel prefix). I tried to fix it for a while, then gave up and swapped in scikit-learn's `HistGradientBoostingClassifier` — same family of histogram-based gradient booster, no compiled dependency. It's a couple of lines change in the notebook and the rest of the pipeline didn't care. If you have XGBoost working on your machine, you can uncomment it in `requirements.txt` and swap the model — the metric block doesn't know which classifier it's looking at.
+- **I started the CNN in Keras.** The TensorFlow install on Python 3.13 took forever on my machine, and PyTorch was already installed. I rewrote the model in PyTorch — it's about 30 lines, and it runs on Apple's MPS backend out of the box. I learned more about PyTorch's training loop doing this than I would have stuck on Keras.
+- **The SECOM MLP is sklearn's `MLPClassifier`, not a custom torch one.** With ~1,200 training rows there's no benefit from a custom training loop; sklearn handles early stopping and the SMOTE side of class balance is already done upstream.
+- **No data augmentation on the WM-811K CNN.** Wafer maps have *meaningful* orientation — there are notches and flats on real wafers and the human-labeled patterns are partially defined by where on the wafer they appear. So naive rotation/flipping can change the *meaning* of a pattern, not just the model's view of it. Doing augmentation properly here needs some domain awareness. I left it as future work rather than do it wrong.
+- **No KNN imputation on SECOM.** I tried it briefly; it was slow on this many features and didn't obviously beat median imputation. I think median is the right answer for sensor data anyway — sensors don't have neighbors in any meaningful sense.
+
+---
 
 ## What I'd try next
 
-- For SECOM: feed sensor IDs back through a SHAP analysis on a properly held-out validation set, and try a stacked model (HGB → calibrated logistic head) to see whether calibration helps the threshold choice.
-- For WM-811K: train at 96×96 with rotation-equivariant augmentation; try a small ResNet variant; look at the unlabeled portion of the dataset for semi-supervised pretraining.
-- A common preprocessing layer for both: time-aware features for SECOM (the labels file has timestamps; sensor drift across the recording window probably matters) and lot-level features for WM-811K.
+For SECOM:
+- The labels file has timestamps. I didn't use them, but sensor drift across the recording window (Jul–Oct 2008) is almost certainly real. Time-aware features (rolling means, drift indicators) feel like a natural next step.
+- Stacking — feed HGB's calibrated probability as a feature into a logistic head. Curious whether it tightens the precision/recall tradeoff at the operating point.
+
+For WM-811K:
+- Train at 96×96 or 128×128. Loc and Scratch lose a lot of detail at 64×64. The trade-off is training time goes up roughly quadratically.
+- Rotation-equivariant augmentation that respects the wafer notch (essentially: only allow rotations that are multiples of the wafer's rotational symmetry).
+- Try a small ResNet variant; my model is intentionally tiny.
+- The dataset has ~640k *unlabeled* wafer maps. Self-supervised pretraining on those would be the obvious advanced step.
+
+For both:
+- Right now each notebook stands alone. If I were turning this into a real fab-analytics product, I'd want yield prediction (SECOM-style) and defect classification (WM-811K-style) to feed into the same downstream system, with the defect pattern from phase 2 acting as a feature into the yield model in phase 1. That's the version of this that would actually be useful to a process engineer.
+
+---
+
+## Acknowledgements
+
+- The SECOM dataset was donated to the UCI ML Repository by McCann and Johnston in 2008.
+- WM-811K is from Wu, Jang, and Chen's *IEEE Transactions on Semiconductor Manufacturing* paper, hosted on Kaggle by user `qingyi`.
+- The framing of this project as a "yield prediction / defect analysis pipeline" rather than a generic ML demo — and a lot of the structural guidance (use PR-AUC not accuracy, try SMOTE/ADASYN, use SHAP, structure the project in two phases) — came from going back and forth with ChatGPT while planning the repo. I built it; the structuring was a collaboration.
